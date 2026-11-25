@@ -1,0 +1,158 @@
+# =============================================================================
+# k8s/disaster-recovery/backup-cronjob.yaml
+# Lab 4 – Disaster Recovery: Automated Database Backup
+#
+# This CronJob runs pg_dump periodically and uploads the backup to object
+# storage (S3-compatible). Combined with PVC snapshots and cross-region
+# replication, this forms the basis of an enterprise DR strategy.
+#
+# Recovery Time Objective  (RTO): < 15 min  (automated failover)
+# Recovery Point Objective (RPO): < 1 hour  (hourly backups)
+# =============================================================================
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+  namespace: devops-lab
+  labels:
+    app: sample-app
+    component: backup
+  annotations:
+    description: "Hourly PostgreSQL backup to S3 for disaster recovery"
+    dr.lab/rpo: "1h"
+    dr.lab/rto: "15m"
+spec:
+  # Run every hour at :05 past the hour
+  schedule: "5 * * * *"
+
+  # Keep last 3 successful & 1 failed job for debugging
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+
+  # If a scheduled run is missed (e.g., cluster downtime), still run it
+  concurrencyPolicy: Forbid          # never run two backups simultaneously
+  startingDeadlineSeconds: 300       # skip if more than 5 min late
+
+  jobTemplate:
+    spec:
+      # Retry up to 2 times on failure
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800    # kill job if it runs > 30 min
+
+      template:
+        metadata:
+          labels:
+            app: sample-app
+            component: backup
+          annotations:
+            vault.hashicorp.com/agent-inject: "true"
+            vault.hashicorp.com/role: "sample-app"
+            vault.hashicorp.com/agent-inject-secret-backup-creds.env: >
+              secret/data/devops-lab/backup-credentials
+            vault.hashicorp.com/agent-inject-template-backup-creds.env: |
+              {{- with secret "secret/data/devops-lab/backup-credentials" -}}
+              export PGPASSWORD="{{ .Data.data.DB_PASSWORD }}"
+              export AWS_ACCESS_KEY_ID="{{ .Data.data.AWS_ACCESS_KEY_ID }}"
+              export AWS_SECRET_ACCESS_KEY="{{ .Data.data.AWS_SECRET_ACCESS_KEY }}"
+              {{- end }}
+            vault.hashicorp.com/agent-pre-populate-only: "true"
+
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: sample-app-sa
+
+          initContainers:
+            # Wait for the database to be ready before attempting backup
+            - name: wait-for-db
+              image: postgres:16-alpine
+              command: ["sh", "-c"]
+              args:
+                - |
+                  until pg_isready -h ${DB_HOST} -p 5432 -U ${DB_USER}; do
+                    echo "Waiting for PostgreSQL…"
+                    sleep 5
+                  done
+                  echo "Database is ready."
+              env:
+                - name: DB_HOST
+                  value: "postgres-svc.devops-lab.svc.cluster.local"
+                - name: DB_USER
+                  value: "appuser"
+
+          containers:
+            - name: backup
+              image: postgres:16-alpine
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  source /vault/secrets/backup-creds.env
+
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_FILE="/backup/db_backup_${TIMESTAMP}.sql.gz"
+
+                  echo "[DR] Starting backup at ${TIMESTAMP}"
+
+                  # Dump database and compress in a single pipe
+                  pg_dump \
+                    --host="${DB_HOST}" \
+                    --port=5432 \
+                    --username="${DB_USER}" \
+                    --dbname="${DB_NAME}" \
+                    --format=custom \
+                    --compress=9 \
+                    --verbose \
+                    --file="${BACKUP_FILE}"
+
+                  echo "[DR] Backup created: ${BACKUP_FILE} ($(du -sh ${BACKUP_FILE} | cut -f1))"
+
+                  # Upload to S3 with server-side encryption
+                  aws s3 cp "${BACKUP_FILE}" \
+                    "s3://${S3_BUCKET}/postgres-backups/${TIMESTAMP}/" \
+                    --sse aws:kms \
+                    --sse-kms-key-id "${KMS_KEY_ID}" \
+                    --region "${AWS_REGION}"
+
+                  echo "[DR] Uploaded to s3://${S3_BUCKET}/postgres-backups/${TIMESTAMP}/"
+
+                  # Prune backups older than RETENTION_DAYS
+                  CUTOFF=$(date -d "-${RETENTION_DAYS} days" +%Y-%m-%dT%H:%M:%S)
+                  aws s3 ls "s3://${S3_BUCKET}/postgres-backups/" --recursive | \
+                    awk -v cutoff="${CUTOFF}" '$1 " " $2 < cutoff {print $4}' | \
+                    xargs -I{} aws s3 rm "s3://${S3_BUCKET}/{}" || true
+
+                  echo "[DR] Backup complete."
+
+              env:
+                - name: DB_HOST
+                  value: "postgres-svc.devops-lab.svc.cluster.local"
+                - name: DB_USER
+                  value: "appuser"
+                - name: DB_NAME
+                  value: "sampledb"
+                - name: S3_BUCKET
+                  value: "devops-lab-dr-backups"
+                - name: AWS_REGION
+                  value: "ap-south-1"
+                - name: KMS_KEY_ID
+                  value: "arn:aws:kms:ap-south-1:123456789012:key/mrk-example"
+                - name: RETENTION_DAYS
+                  value: "30"
+
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "512Mi"
+
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-pvc

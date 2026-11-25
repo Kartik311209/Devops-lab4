@@ -1,0 +1,162 @@
+# =============================================================================
+# monitoring/prometheus-config.yaml
+# Lab 4 – Prometheus Monitoring Configuration
+#
+# Scrapes metrics from:
+#   - Flask application (via prometheus-flask-exporter)
+#   - Kubernetes API server
+#   - Node Exporter (node metrics)
+#   - cAdvisor (container metrics)
+#
+# Deploy with Prometheus Operator:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#        --namespace monitoring --create-namespace \
+#        --values monitoring/prometheus-config.yaml
+# =============================================================================
+
+# ── PrometheusRule: application-specific alert rules ─────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sample-app-rules
+  namespace: monitoring
+  labels:
+    app: sample-app
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    # ── Application SLO Rules ──────────────────────────────────────────────
+    - name: sample-app.slo
+      interval: 30s
+      rules:
+        # Availability SLO: 99.9% uptime over 30-day rolling window
+        - record: job:http_requests_total:rate5m
+          expr: |
+            sum(rate(http_requests_total{job="sample-app"}[5m])) by (status)
+
+        - record: job:http_error_rate:ratio5m
+          expr: |
+            sum(rate(http_requests_total{job="sample-app",status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="sample-app"}[5m]))
+
+        # P99 latency recording rule
+        - record: job:http_request_duration_seconds:p99_5m
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(http_request_duration_seconds_bucket{job="sample-app"}[5m]))
+              by (le)
+            )
+
+    # ── Canary-specific rules ──────────────────────────────────────────────
+    - name: sample-app.canary
+      rules:
+        - record: job:canary_error_rate:ratio2m
+          expr: |
+            sum(rate(http_requests_total{job="sample-app",track="canary",status=~"5.."}[2m]))
+            /
+            sum(rate(http_requests_total{job="sample-app",track="canary"}[2m]))
+
+        - alert: CanaryHighErrorRate
+          expr: job:canary_error_rate:ratio2m > 0.01
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Canary deployment has high error rate"
+            description: >
+              Canary error rate is {{ $value | humanizePercentage }} (threshold: 1%).
+              Trigger rollback: kubectl scale deploy sample-app-canary -n devops-lab --replicas=0
+            runbook: "https://wiki.example.com/runbooks/canary-rollback"
+
+        - alert: CanaryHighLatency
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(http_request_duration_seconds_bucket{job="sample-app",track="canary"}[2m]))
+              by (le)
+            ) * 1000 > 500
+          for: 3m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Canary P99 latency exceeds 500ms"
+            description: "Canary P99 = {{ $value | humanize }}ms"
+
+    # ── Blue-Green rules ───────────────────────────────────────────────────
+    - name: sample-app.blue-green
+      rules:
+        - alert: InactiveSlotStillReceivingTraffic
+          expr: |
+            sum(rate(http_requests_total{job="sample-app",color="blue"}[5m])) > 0
+            AND
+            sum(rate(http_requests_total{job="sample-app",color="green"}[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Both blue and green are receiving traffic"
+            description: >
+              Both colors are receiving traffic simultaneously. The Service selector
+              may not be set correctly, or a previous session is still active.
+
+    # ── Infrastructure alerts ──────────────────────────────────────────────
+    - name: sample-app.infrastructure
+      rules:
+        - alert: PodCrashLooping
+          expr: |
+            kube_pod_container_status_restarts_total{namespace="devops-lab"}
+            - kube_pod_container_status_restarts_total{namespace="devops-lab"} offset 15m > 3
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash-looping"
+
+        - alert: HighMemoryUsage
+          expr: |
+            sum(container_memory_working_set_bytes{namespace="devops-lab",container="sample-app"})
+            /
+            sum(kube_pod_container_resource_limits{namespace="devops-lab",resource="memory",container="sample-app"})
+            > 0.85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Memory usage > 85% of limit in devops-lab"
+
+        - alert: BackupJobFailed
+          expr: kube_job_failed{namespace="devops-lab",job_name=~"db-backup-.*"} > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Database backup CronJob failed"
+            description: "DR backup failed – RPO may be breached if not addressed"
+
+---
+# ── ServiceMonitor: tells Prometheus how to scrape our app ───────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sample-app
+  namespace: monitoring
+  labels:
+    app: sample-app
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: sample-app
+  namespaceSelector:
+    matchNames:
+      - devops-lab
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      honorLabels: true

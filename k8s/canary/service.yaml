@@ -1,0 +1,79 @@
+# =============================================================================
+# k8s/canary/service.yaml
+# Lab 4 – Canary Service
+#
+# A SINGLE Service routes to BOTH stable and canary pods because the selector
+# only matches on `app: sample-app` (not `track`). Traffic is split
+# proportionally to the replica counts of each deployment.
+# =============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app-service
+  namespace: devops-lab
+  labels:
+    app: sample-app
+  annotations:
+    description: >
+      Routes to both stable (90%) and canary (10%) pods by replica-count ratio.
+      No Istio needed for basic canary; use Istio VirtualService for precise weights.
+spec:
+  type: LoadBalancer
+  # Intentionally does NOT include `track:` – matches BOTH stable and canary pods
+  selector:
+    app: sample-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+
+---
+# ── Canary-only Service (for direct validation & metrics collection) ─────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app-canary-svc
+  namespace: devops-lab
+  labels:
+    app: sample-app
+    track: canary
+  annotations:
+    description: "Direct access to canary pods for A/B testing and metric comparison"
+spec:
+  type: ClusterIP
+  selector:
+    app: sample-app
+    track: canary
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+
+---
+# ── HorizontalPodAutoscaler for Stable ──────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sample-app-stable-hpa
+  namespace: devops-lab
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sample-app-stable
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

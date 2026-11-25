@@ -1,0 +1,118 @@
+# =============================================================================
+# k8s/gitops/flux/gotk-sync.yaml
+# Lab 4 – GitOps with Flux CD (alternative to Argo CD)
+#
+# Flux continuously reconciles the cluster state with the Git repository.
+# Install Flux: flux bootstrap github --owner=your-org --repository=devops-lab4
+# =============================================================================
+
+---
+# ── GitRepository: watch the Git repo for changes ────────────────────────────
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: devops-lab4
+  namespace: flux-system
+  labels:
+    app: sample-app
+spec:
+  interval: 1m          # poll Git every minute (use webhook receiver for instant)
+  url: https://github.com/your-org/devops-lab4.git
+  ref:
+    branch: main
+  secretRef:
+    name: flux-git-credentials   # SSH key or PAT stored as K8s Secret
+
+---
+# ── Kustomization: apply the overlay from the Git repo ───────────────────────
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: sample-app
+  namespace: flux-system
+spec:
+  interval: 5m          # re-reconcile every 5 minutes (drift correction)
+  path: "./k8s/gitops"  # path inside the repo
+  prune: true           # delete resources removed from Git
+  wait: true            # wait for rollout to complete
+  timeout: 10m
+
+  sourceRef:
+    kind: GitRepository
+    name: devops-lab4
+
+  targetNamespace: devops-lab
+
+  # Health checks before marking as ready
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: sample-app-blue
+      namespace: devops-lab
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: sample-app-green
+      namespace: devops-lab
+
+  # Post-build variable substitution
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: flux-cluster-vars
+      - kind: Secret
+        name: flux-cluster-secrets
+
+---
+# ── ImageRepository: scan registry for new image tags ────────────────────────
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: sample-app
+  namespace: flux-system
+spec:
+  image: your-registry/sample-app
+  interval: 1m
+  secretRef:
+    name: ghcr-pull-secret
+
+---
+# ── ImagePolicy: define which tags to automatically promote ──────────────────
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: sample-app
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: sample-app
+  policy:
+    semver:
+      range: ">=1.0.0"   # automatically promote any semver >= 1.0.0
+
+---
+# ── ImageUpdateAutomation: auto-commit new image tags to Git ─────────────────
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageUpdateAutomation
+metadata:
+  name: sample-app
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: devops-lab4
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        email: fluxbot@example.com
+        name: Flux Image Updater
+      messageTemplate: |
+        chore: update sample-app image to {{range .Updated.Images}}{{println .}}{{end}}
+    push:
+      branch: main
+  update:
+    path: "./k8s/gitops"
+    strategy: Setters   # uses `# {"$imagepolicy": "flux-system:sample-app"}` markers

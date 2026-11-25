@@ -1,0 +1,93 @@
+# =============================================================================
+# k8s/disaster-recovery/pvc.yaml
+# Lab 4 – Disaster Recovery: Storage Resources
+#
+# PersistentVolumeClaim for temporary backup staging (before S3 upload).
+# Also includes a VolumeSnapshotClass for CSI-based disk snapshots.
+# =============================================================================
+
+---
+# ── PVC for backup staging ────────────────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-pvc
+  namespace: devops-lab
+  labels:
+    app: sample-app
+    component: backup
+  annotations:
+    description: "Temporary staging area for database backups before S3 upload"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd    # adjust to your cloud provider's StorageClass
+  resources:
+    requests:
+      storage: 20Gi             # size to hold at least 2 uncompressed DB dumps
+
+---
+# ── PVC for application data (stateful workloads) ─────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data-pvc
+  namespace: devops-lab
+  labels:
+    app: sample-app
+    component: app-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# ── VolumeSnapshotClass – enables CSI disk snapshots ──────────────────────────
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: csi-aws-ebs-snapclass
+  annotations:
+    snapshot.storage.kubernetes.io/is-default-class: "true"
+driver: ebs.csi.aws.com
+deletionPolicy: Retain          # retain snapshots when VolumeSnapshot is deleted
+
+---
+# ── VolumeSnapshot – take a point-in-time snapshot of app data ───────────────
+# (Normally triggered by a CronJob, shown here as a standalone example)
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: app-data-snapshot-manual
+  namespace: devops-lab
+  labels:
+    app: sample-app
+    component: snapshot
+  annotations:
+    description: "Manual point-in-time snapshot for DR validation"
+spec:
+  volumeSnapshotClassName: csi-aws-ebs-snapclass
+  source:
+    persistentVolumeClaimName: app-data-pvc
+
+---
+# ── StorageClass for cross-AZ replication (DR) ────────────────────────────────
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+  kmsKeyId: "arn:aws:kms:ap-south-1:123456789012:key/mrk-example"
+  throughput: "125"
+  iops: "3000"
+volumeBindingMode: WaitForFirstConsumer    # bind only when pod is scheduled
+reclaimPolicy: Retain                      # keep PV after PVC deletion (safety)
+allowVolumeExpansion: true

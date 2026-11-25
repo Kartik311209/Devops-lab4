@@ -1,0 +1,128 @@
+# =============================================================================
+# k8s/blue-green/green-deployment.yaml
+# Lab 4 – Blue-Green Deployment Strategy
+#
+# "Green" is the STAGING / INCOMING slot. The pipeline deploys here, runs
+# smoke tests, then flips the Service selector to "green".
+# "Blue" stays up for instant rollback – deleted only after green is proven.
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app-green
+  namespace: devops-lab
+  labels:
+    app: sample-app
+    color: green
+    version: "2.0.0"      # <– new version under validation
+  annotations:
+    description: "Green environment – STAGING slot, being validated"
+spec:
+  replicas: 3
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: sample-app
+      color: green
+
+  template:
+    metadata:
+      labels:
+        app: sample-app
+        color: green
+        version: "2.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "5000"
+        prometheus.io/path:   "/metrics"
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: sample-app
+              color: green
+
+      containers:
+        - name: sample-app
+          image: your-registry/sample-app:2.0.0   # new image under test
+
+          ports:
+            - containerPort: 5000
+              name: http
+
+          env:
+            - name: APP_COLOR
+              value: "green"
+            - name: APP_VERSION
+              value: "2.0.0"
+            - name: APP_ENV
+              value: "production"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sample-app-secret
+                  key: SECRET_KEY
+
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "128Mi"
+            limits:
+              cpu:    "500m"
+              memory: "256Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds:        15
+            failureThreshold:     3
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds:       10
+            failureThreshold:    2
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            failureThreshold: 12
+            periodSeconds:    5
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:   true
+            runAsNonRoot:             true
+            runAsUser:                1001
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      terminationGracePeriodSeconds: 30

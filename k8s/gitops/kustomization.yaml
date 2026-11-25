@@ -1,0 +1,98 @@
+# =============================================================================
+# k8s/gitops/kustomization.yaml
+# Lab 4 – GitOps Kustomize Overlay
+#
+# Kustomize lets us maintain a single base manifest and overlay environment-
+# specific differences (images, replica counts, resource limits) without
+# templating engines like Helm.
+#
+# Directory layout:
+#   k8s/
+#   ├── base/              ← shared resources
+#   │   ├── deployment.yaml
+#   │   ├── service.yaml
+#   │   └── kustomization.yaml
+#   └── gitops/            ← this overlay (production)
+#       ├── kustomization.yaml  (this file)
+#       └── patches/
+#           ├── replicas.yaml
+#           └── resources.yaml
+# =============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: sample-app-production
+  annotations:
+    description: "Production overlay for sample-app – managed by Argo CD"
+
+# ── Namespace ─────────────────────────────────────────────────────────────────
+namespace: devops-lab
+
+# ── Common labels appended to ALL resources ───────────────────────────────────
+commonLabels:
+  managed-by: argocd
+  environment: production
+
+# ── Common annotations ────────────────────────────────────────────────────────
+commonAnnotations:
+  gitops.lab/repo: "https://github.com/your-org/devops-lab4"
+  gitops.lab/managed: "true"
+
+# ── Resources to include ─────────────────────────────────────────────────────
+resources:
+  - ../blue-green/blue-deployment.yaml
+  - ../blue-green/green-deployment.yaml
+  - ../blue-green/service.yaml
+  - ../secrets/external-secret.yaml
+
+# ── Images – override base image tags ────────────────────────────────────────
+images:
+  - name: your-registry/sample-app
+    newTag: "1.0.0"       # ArgoCD Image Updater patches this automatically
+
+# ── Patches ───────────────────────────────────────────────────────────────────
+patches:
+  # Scale up replicas for production
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+    target:
+      kind: Deployment
+      name: sample-app-blue
+
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+    target:
+      kind: Deployment
+      name: sample-app-green
+
+  # Increase resource limits for production load
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "1"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "512Mi"
+    target:
+      kind: Deployment
+      labelSelector: "app=sample-app"
+
+# ── ConfigMap Generator ───────────────────────────────────────────────────────
+configMapGenerator:
+  - name: app-config
+    literals:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+      - METRICS_ENABLED=true
+
+# ── Secret Generator (DO NOT use for real secrets – use ESO / Vault) ──────────
+# secretGenerator:
+#   - name: sample-app-secret
+#     literals:
+#       - SECRET_KEY=change-me   # ← NEVER commit real secrets!

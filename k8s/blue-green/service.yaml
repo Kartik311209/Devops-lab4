@@ -1,0 +1,58 @@
+# =============================================================================
+# k8s/blue-green/service.yaml
+# Lab 4 – Blue-Green Service
+#
+# The selector.color field is the ONLY thing that changes during a blue-green
+# switch. Patch it with:
+#   kubectl patch svc sample-app-service -n devops-lab \
+#     -p '{"spec":{"selector":{"color":"green"}}}'
+#
+# A separate "preview" service points permanently at green, allowing QA teams
+# to test the new version before it goes live.
+# =============================================================================
+
+# ── Production Service (switch selector to flip traffic) ────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app-service
+  namespace: devops-lab
+  labels:
+    app: sample-app
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    # Record which color is currently live – updated by blue-green-switch.sh
+    deployment.lab/active-color: "blue"
+spec:
+  type: LoadBalancer
+  selector:
+    app: sample-app
+    color: blue         # ← CI pipeline patches this to "green" after validation
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+      protocol: TCP
+  sessionAffinity: None
+
+---
+# ── Preview / QA Service (always points at green) ───────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app-preview
+  namespace: devops-lab
+  labels:
+    app: sample-app
+    role: preview
+  annotations:
+    description: "QA endpoint – always routes to green (staging) slot"
+spec:
+  type: ClusterIP
+  selector:
+    app: sample-app
+    color: green
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000

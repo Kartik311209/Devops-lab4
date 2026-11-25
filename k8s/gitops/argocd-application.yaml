@@ -1,0 +1,101 @@
+# =============================================================================
+# k8s/gitops/argocd-application.yaml
+# Lab 4 – GitOps with Argo CD
+#
+# Argo CD watches the Git repository and automatically syncs the cluster state
+# to match what is declared in Git. This is the "single source of truth" model.
+#
+# Install Argo CD:
+#   kubectl create namespace argocd
+#   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+#
+# Apply this Application:
+#   kubectl apply -f k8s/gitops/argocd-application.yaml
+# =============================================================================
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sample-app
+  namespace: argocd
+  labels:
+    app: sample-app
+    team: platform
+  finalizers:
+    # Cascade-delete all managed resources when this Application is deleted
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"   # deploy after infrastructure (wave 0)
+
+spec:
+  project: default
+
+  # ── Source: Git repository ─────────────────────────────────────────────────
+  source:
+    repoURL: https://github.com/your-org/devops-lab4.git
+    targetRevision: main     # track HEAD of main; use a tag for stable releases
+    path: k8s/gitops         # Kustomize overlay directory
+
+    # Kustomize build options
+    kustomize:
+      version: v5.4.0
+      images:
+        # Argo CD Image Updater updates this automatically when a new image is pushed
+        - your-registry/sample-app:1.0.0
+
+  # ── Destination: Kubernetes cluster & namespace ────────────────────────────
+  destination:
+    server: https://kubernetes.default.svc   # in-cluster
+    namespace: devops-lab
+
+  # ── Sync policy ───────────────────────────────────────────────────────────
+  syncPolicy:
+    automated:
+      prune: true        # delete resources removed from Git
+      selfHeal: true     # revert manual cluster changes (drift correction)
+      allowEmpty: false  # never sync to an empty state
+
+    syncOptions:
+      - CreateNamespace=true      # create namespace if missing
+      - PrunePropagationPolicy=foreground
+      - ApplyOutOfSyncOnly=true   # only apply resources that have drifted
+      - RespectIgnoreDifferences=true
+
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # ── Ignore differences that are managed externally ──────────────────────────
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas   # HPA manages this; ignore Argo CD drift
+    - group: ""
+      kind: Secret
+      jsonPointers:
+        - /data            # Vault / ESO manages secrets; ignore drift
+
+  # ── Health check overrides ─────────────────────────────────────────────────
+  revisionHistoryLimit: 10
+
+---
+# ── Argo CD Image Updater Annotation ConfigMap ───────────────────────────────
+# Install image updater: https://argocd-image-updater.readthedocs.io/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-image-updater-config
+  namespace: argocd
+data:
+  registries.conf: |
+    registries:
+      - name: GitHub Container Registry
+        api_url: https://ghcr.io
+        prefix: ghcr.io
+        credentials: pullsecret:argocd/ghcr-pull-secret
+        defaultns: your-org
+        insecure: false

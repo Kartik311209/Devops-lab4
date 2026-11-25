@@ -1,0 +1,120 @@
+# =============================================================================
+# monitoring/alertmanager-config.yaml
+# Lab 4 – Alertmanager Routing & Notification Rules
+#
+# Routes alerts to the right team via Slack, PagerDuty, and email.
+# =============================================================================
+
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: sample-app-alerts
+  namespace: monitoring
+  labels:
+    app: sample-app
+spec:
+  route:
+    # Default receiver for unmatched alerts
+    receiver: slack-platform
+    groupBy: ["alertname", "namespace"]
+    groupWait:      30s
+    groupInterval:  5m
+    repeatInterval: 4h
+
+    routes:
+      # Critical alerts → PagerDuty (immediate on-call page)
+      - matchers:
+          - name: severity
+            value: critical
+        receiver: pagerduty-oncall
+        repeatInterval: 1h
+        continue: true   # also send to Slack
+
+      # Canary-specific alerts → platform team Slack channel
+      - matchers:
+          - name: alertname
+            matchType: =~
+            value: "Canary.*"
+        receiver: slack-canary-channel
+        groupWait: 10s   # alert quickly for canary issues
+
+      # Backup failures → SRE on-call + email
+      - matchers:
+          - name: alertname
+            value: BackupJobFailed
+        receiver: sre-email
+        repeatInterval: 30m
+
+  receivers:
+    - name: slack-platform
+      slackConfigs:
+        - apiURL:
+            name: alertmanager-slack-secret
+            key: webhook-url
+          channel: "#platform-alerts"
+          sendResolved: true
+          title: |
+            [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}]
+            {{ .CommonLabels.alertname }}
+          text: |
+            {{ range .Alerts }}
+            *Alert:* {{ .Labels.alertname }}
+            *Severity:* {{ .Labels.severity }}
+            *Namespace:* {{ .Labels.namespace }}
+            *Description:* {{ .Annotations.description }}
+            *Runbook:* {{ .Annotations.runbook }}
+            {{ end }}
+          color: |
+            {{ if eq .Status "firing" }}danger{{ else }}good{{ end }}
+
+    - name: slack-canary-channel
+      slackConfigs:
+        - apiURL:
+            name: alertmanager-slack-secret
+            key: webhook-url
+          channel: "#canary-deployments"
+          sendResolved: true
+          title: "🐦 Canary Alert: {{ .CommonLabels.alertname }}"
+          text: |
+            {{ range .Alerts }}
+            *Description:* {{ .Annotations.description }}
+            *Action:* {{ .Annotations.runbook }}
+            {{ end }}
+
+    - name: pagerduty-oncall
+      pagerdutyConfigs:
+        - routingKey:
+            name: alertmanager-pagerduty-secret
+            key: routing-key
+          severity: critical
+          description: |
+            {{ .CommonLabels.alertname }}: {{ .CommonAnnotations.description }}
+
+    - name: sre-email
+      emailConfigs:
+        - to: "sre-oncall@example.com"
+          from: "alertmanager@example.com"
+          smarthost: "smtp.example.com:587"
+          authUsername: "alertmanager@example.com"
+          authPassword:
+            name: alertmanager-smtp-secret
+            key: password
+          requireTLS: true
+          headers:
+            Subject: "[ALERT] {{ .CommonLabels.alertname }} – {{ .CommonLabels.namespace }}"
+          html: |
+            <h2>{{ .CommonLabels.alertname }}</h2>
+            {{ range .Alerts }}
+            <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+            <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+            {{ end }}
+
+  inhibitRules:
+    # If a whole namespace is down, suppress individual pod alerts
+    - sourceMatchers:
+        - name: alertname
+          value: NamespaceDown
+      targetMatchers:
+        - name: alertname
+          value: PodCrashLooping
+      equal: ["namespace"]

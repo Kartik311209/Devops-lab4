@@ -1,0 +1,151 @@
+# =============================================================================
+# k8s/blue-green/blue-deployment.yaml
+# Lab 4 – Blue-Green Deployment Strategy
+#
+# STRATEGY: Deploy the new version ("green") while "blue" serves production.
+# Once green is validated, switch the Service selector from blue → green.
+# Instant rollback: flip selector back to blue. Zero-downtime guaranteed.
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app-blue
+  namespace: devops-lab
+  labels:
+    app: sample-app
+    color: blue
+    version: "1.0.0"
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    description: "Blue environment – currently ACTIVE production slot"
+spec:
+  replicas: 3
+
+  # We deliberately do NOT use rollingUpdate here because blue-green handles
+  # zero-downtime at the Service level, not the pod level.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: sample-app
+      color: blue
+
+  template:
+    metadata:
+      labels:
+        app: sample-app
+        color: blue
+        version: "1.0.0"
+      annotations:
+        # Prometheus scraping
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "5000"
+        prometheus.io/path:   "/metrics"
+    spec:
+      # Spread pods across nodes for HA
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: sample-app
+              color: blue
+
+      containers:
+        - name: sample-app
+          image: your-registry/sample-app:1.0.0
+
+          ports:
+            - containerPort: 5000
+              name: http
+
+          env:
+            - name: APP_COLOR
+              value: "blue"
+            - name: APP_VERSION
+              value: "1.0.0"
+            - name: APP_ENV
+              value: "production"
+            # Secret injected by External Secrets Operator (see secrets/)
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sample-app-secret
+                  key: SECRET_KEY
+
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "128Mi"
+            limits:
+              cpu:    "500m"
+              memory: "256Mi"
+
+          # Liveness: restart the pod if the app hangs
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds:        15
+            failureThreshold:     3
+
+          # Readiness: only send traffic when the app is fully ready
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds:       10
+            failureThreshold:    2
+
+          # Startup probe: give extra time on cold start
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            failureThreshold: 12
+            periodSeconds:    5
+
+          # Graceful shutdown: finish in-flight requests before terminating
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+
+          # Security context: run as non-root
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:   true
+            runAsNonRoot:             true
+            runAsUser:                1001
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      terminationGracePeriodSeconds: 30
+
+      # Prevent pods from being scheduled on the same node as green pods
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: sample-app
+                    color: green
+                topologyKey: kubernetes.io/hostname

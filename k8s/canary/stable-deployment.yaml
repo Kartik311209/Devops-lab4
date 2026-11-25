@@ -1,0 +1,108 @@
+# =============================================================================
+# k8s/canary/stable-deployment.yaml
+# Lab 4 – Canary Deployment Strategy
+#
+# STRATEGY: Run the new version ("canary") alongside the stable version.
+# Gradually increase canary replicas while monitoring error rates & latency.
+# Promote canary → stable once metrics confirm health, or rollback instantly.
+#
+# Traffic distribution (without Istio) is proportional to replica counts:
+#   Stable=9, Canary=1  → ~10% canary traffic
+#   Stable=5, Canary=5  → ~50% canary traffic (mid-rollout)
+#   Stable=0, Canary=10 → 100% canary (fully promoted)
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app-stable
+  namespace: devops-lab
+  labels:
+    app: sample-app
+    track: stable
+    version: "1.0.0"
+  annotations:
+    description: "Stable production deployment"
+spec:
+  replicas: 9    # 9 of 10 total replicas → ~90% traffic
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+
+  selector:
+    matchLabels:
+      app: sample-app
+      track: stable
+
+  template:
+    metadata:
+      labels:
+        app: sample-app
+        track: stable
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "5000"
+        prometheus.io/path:   "/metrics"
+    spec:
+      containers:
+        - name: sample-app
+          image: your-registry/sample-app:1.0.0
+
+          ports:
+            - containerPort: 5000
+              name: http
+
+          env:
+            - name: APP_COLOR
+              value: "stable"
+            - name: APP_VERSION
+              value: "1.0.0"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sample-app-secret
+                  key: SECRET_KEY
+
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "128Mi"
+            limits:
+              cpu:    "500m"
+              memory: "256Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot:             true
+            runAsUser:                1001
+            readOnlyRootFilesystem:   true
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      terminationGracePeriodSeconds: 30
