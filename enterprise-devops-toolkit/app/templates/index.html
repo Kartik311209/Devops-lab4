@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enterprise TaskFlow</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%);
+      color: #fff;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+    header h1 { font-size: 1.5rem; letter-spacing: .5px; }
+    .badge {
+      font-size: .75rem;
+      padding: .25rem .6rem;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .badge-blue   { background: #3b82f6; }
+    .badge-green  { background: #22c55e; }
+    .badge-canary { background: #f59e0b; color: #1a202c; }
+    .meta { font-size: .8rem; opacity: .8; margin-top: .2rem; }
+
+    /* ── Stats bar ────────────────────────────────────────────────── */
+    .stats {
+      display: flex;
+      gap: 1rem;
+      padding: 1rem 2rem;
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      flex-wrap: wrap;
+    }
+    .stat-card {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: .6rem 1.2rem;
+      text-align: center;
+      min-width: 90px;
+    }
+    .stat-card .num  { font-size: 1.6rem; font-weight: 700; }
+    .stat-card .lbl  { font-size: .7rem; color: #718096; text-transform: uppercase; }
+    .total      { color: #2d6a9f; }
+    .pending    { color: #d97706; }
+    .inprog     { color: #7c3aed; }
+    .completed  { color: #16a34a; }
+
+    /* ── Main layout ──────────────────────────────────────────────── */
+    main { max-width: 900px; margin: 1.5rem auto; padding: 0 1rem; }
+
+    /* ── New task form ────────────────────────────────────────────── */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      margin-bottom: 1.5rem;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #2d3748; }
+    .form-row { display: flex; gap: .75rem; flex-wrap: wrap; }
+    .form-row input, .form-row select, .form-row textarea {
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      padding: .5rem .75rem;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .form-row input:focus, .form-row select:focus, .form-row textarea:focus {
+      border-color: #2d6a9f;
+    }
+    .form-row input[name="title"] { flex: 1; min-width: 200px; }
+    .btn {
+      padding: .5rem 1.1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: .88rem;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: #2d6a9f; color: #fff; }
+    .btn-danger  { background: #e53e3e; color: #fff; }
+    .btn-success { background: #38a169; color: #fff; padding: .3rem .8rem; }
+
+    /* ── Task list ────────────────────────────────────────────────── */
+    .task-item {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: .75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .task-body { flex: 1; }
+    .task-title { font-weight: 600; font-size: .95rem; }
+    .task-desc  { font-size: .82rem; color: #718096; margin-top: .2rem; }
+    .task-meta  { font-size: .75rem; color: #a0aec0; margin-top: .4rem; }
+    .pill {
+      display: inline-block;
+      font-size: .7rem;
+      padding: .15rem .55rem;
+      border-radius: 999px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .3px;
+    }
+    .s-pending     { background: #fef3c7; color: #92400e; }
+    .s-in_progress { background: #ede9fe; color: #5b21b6; }
+    .s-completed   { background: #d1fae5; color: #065f46; }
+    .s-cancelled   { background: #fee2e2; color: #991b1b; }
+    .p-critical { background: #fee2e2; color: #991b1b; }
+    .p-high     { background: #fed7aa; color: #9a3412; }
+    .p-medium   { background: #fef9c3; color: #854d0e; }
+    .p-low      { background: #dcfce7; color: #166534; }
+
+    .task-actions { display: flex; gap: .5rem; align-items: center; }
+
+    /* ── Empty state ──────────────────────────────────────────────── */
+    .empty { text-align: center; padding: 3rem; color: #a0aec0; }
+    .empty svg { width: 64px; height: 64px; opacity: .4; margin-bottom: .75rem; }
+
+    /* ── Footer ───────────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      font-size: .75rem;
+      color: #a0aec0;
+      padding: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────── -->
+<header>
+  <div>
+    <h1>🚀 Enterprise TaskFlow</h1>
+    <div class="meta">Enterprise DevOps Deployment Toolkit · Lab Demo</div>
+  </div>
+  <div style="text-align:right">
+    <span class="badge badge-{{ color }}">{{ color | upper }}</span>
+    <div class="meta">v{{ version }} · {{ env }}</div>
+  </div>
+</header>
+
+<!-- ── Stats ──────────────────────────────────────────────────────── -->
+<div class="stats">
+  <div class="stat-card"><div class="num total">{{ stats.total }}</div><div class="lbl">Total</div></div>
+  <div class="stat-card"><div class="num pending">{{ stats.pending }}</div><div class="lbl">Pending</div></div>
+  <div class="stat-card"><div class="num inprog">{{ stats.in_progress }}</div><div class="lbl">In Progress</div></div>
+  <div class="stat-card"><div class="num completed">{{ stats.completed }}</div><div class="lbl">Completed</div></div>
+</div>
+
+<!-- ── Main ───────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- New Task Form -->
+  <div class="card">
+    <h2>➕ Create New Task</h2>
+    <form id="taskForm" class="form-row">
+      <input  type="text"   name="title"       placeholder="Task title (required)" maxlength="200" required />
+      <input  type="text"   name="description" placeholder="Description (optional)" />
+      <select name="priority">
+        <option value="low">Low</option>
+        <option value="medium" selected>Medium</option>
+        <option value="high">High</option>
+        <option value="critical">Critical</option>
+      </select>
+      <button type="submit" class="btn btn-primary">Add Task</button>
+    </form>
+  </div>
+
+  <!-- Task List -->
+  <div id="taskList">
+    {% if tasks %}
+      {% for task in tasks %}
+      <div class="task-item" data-id="{{ task.id }}">
+        <div class="task-body">
+          <div class="task-title">{{ task.title }}</div>
+          {% if task.description %}
+          <div class="task-desc">{{ task.description }}</div>
+          {% endif %}
+          <div class="task-meta">
+            <span class="pill s-{{ task.status }}">{{ task.status | replace('_', ' ') }}</span>
+            <span class="pill p-{{ task.priority }}">{{ task.priority }}</span>
+            &nbsp;Created: {{ task.created_at[:10] }}
+          </div>
+        </div>
+        <div class="task-actions">
+          <select class="status-sel" data-id="{{ task.id }}" style="font-size:.8rem;padding:.25rem .5rem;border-radius:5px;border:1px solid #cbd5e0;">
+            <option {% if task.status=='pending'     %}selected{% endif %} value="pending">Pending</option>
+            <option {% if task.status=='in_progress' %}selected{% endif %} value="in_progress">In Progress</option>
+            <option {% if task.status=='completed'   %}selected{% endif %} value="completed">Completed</option>
+            <option {% if task.status=='cancelled'   %}selected{% endif %} value="cancelled">Cancelled</option>
+          </select>
+          <button class="btn btn-success upd-btn" data-id="{{ task.id }}">Save</button>
+          <button class="btn btn-danger  del-btn" data-id="{{ task.id }}">✕</button>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2
+               M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        <p>No tasks yet. Create your first task above!</p>
+      </div>
+    {% endif %}
+  </div>
+
+</main>
+
+<footer>Enterprise TaskFlow · EDDT Lab · Python Flask + SQLite · v{{ version }}</footer>
+
+<script>
+// ── Create task ────────────────────────────────────────────────────────
+document.getElementById('taskForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd   = new FormData(e.target);
+  const body = { title: fd.get('title'), description: fd.get('description'), priority: fd.get('priority') };
+  const res  = await fetch('/api/tasks', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (res.ok) { location.reload(); } else { const d = await res.json(); alert('Error: ' + d.error); }
+});
+
+// ── Delete task ────────────────────────────────────────────────────────
+document.querySelectorAll('.del-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (!confirm('Delete this task?')) return;
+    const id  = btn.dataset.id;
+    const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+    if (res.ok) { location.reload(); } else { alert('Delete failed'); }
+  });
+});
+
+// ── Update task status ─────────────────────────────────────────────────
+document.querySelectorAll('.upd-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id     = btn.dataset.id;
+    const sel    = document.querySelector(`.status-sel[data-id="${id}"]`);
+    const status = sel.value;
+    const res    = await fetch(`/api/tasks/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) { location.reload(); } else { alert('Update failed'); }
+  });
+});
+</script>
+</body>
+</html>

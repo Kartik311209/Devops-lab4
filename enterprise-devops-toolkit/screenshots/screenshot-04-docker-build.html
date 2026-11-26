@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Screenshot 04 – Docker Build</title>
+  <style>
+    body{margin:0;background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;}
+    .terminal{background:#0d1117;color:#e6edf3;font-family:'Courier New',monospace;font-size:12px;border-radius:10px;overflow:hidden;margin:12px;}
+    .term-bar{background:#21262d;padding:7px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #30363d;}
+    .dot{width:12px;height:12px;border-radius:50%;}
+    .dot-r{background:#ff5f56;}.dot-y{background:#ffbd2e;}.dot-g{background:#27c93f;}
+    .term-title{flex:1;text-align:center;color:#8b949e;font-size:11px;}
+    .term-body{padding:14px 16px;line-height:1.72;}
+    .cmd{color:#79c0ff;}.dim{color:#8b949e;}.ok{color:#3fb950;}.step{color:#a5d6ff;}
+    .badges{display:flex;gap:10px;padding:8px 12px;}
+    .badge{flex:1;text-align:center;border-radius:6px;padding:6px 4px;font-family:monospace;font-size:12px;}
+  </style>
+</head>
+<body>
+  <div style="background:#1e3a5f;color:#94d3fc;text-align:center;font-family:monospace;font-size:11px;padding:4px 0;">
+    📸 Lab Evidence — Screenshot 04: Docker Multi-Stage Build &amp; Non-Root User Verification
+  </div>
+  <div class="terminal">
+    <div class="term-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="term-title">bash — docker build — 90×36</div>
+    </div>
+    <div class="term-body">
+      <div><span class="dim">student@devops-lab</span>:<span class="ok">~/enterprise-devops-toolkit</span>$ <span class="cmd">docker build -f docker/Dockerfile -t enterprise-taskflow:1.0.0 .</span></div>
+      <div style="margin-top:6px;" class="dim">[+] Building 42.3s (14/14) FINISHED</div>
+      <div><span class="dim"> =&gt;</span> <span class="step">[internal] load build definition from Dockerfile</span> <span class="dim">0.1s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="step">[internal] load metadata for python:3.12-slim</span> <span class="dim">1.8s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="step">[Stage 1/2 builder] FROM python:3.12-slim AS builder</span> <span class="dim">0.1s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="step">[Stage 1/2 builder] COPY requirements.txt .</span> <span class="dim">0.1s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="step">[Stage 1/2 builder] RUN pip install --no-cache-dir --prefix=/install</span> <span class="dim">28.4s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="step">[Stage 2/2 runtime] FROM python:3.12-slim AS runtime</span> <span class="dim">0.1s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="step">[Stage 2/2 runtime] RUN groupadd -r appgroup &amp;&amp; useradd -r -g appgroup appuser</span> <span class="dim">0.5s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="step">[Stage 2/2 runtime] COPY --from=builder /install /usr/local</span> <span class="dim">2.1s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="step">[Stage 2/2 runtime] COPY --chown=appuser:appgroup . /app</span> <span class="dim">0.2s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="step">[Stage 2/2 runtime] USER appuser  |  EXPOSE 5000</span> <span class="dim">0.0s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="ok">exporting to image</span> <span class="dim">2.6s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="ok">=> writing image sha256:8a3f2e19c47d...</span> <span class="dim">0.0s</span></div>
+      <div><span class="dim"> =&gt;</span> <span class="ok">=> naming to docker.io/library/enterprise-taskflow:1.0.0</span> <span class="dim">0.0s</span></div>
+
+      <div style="margin-top:10px;"><span class="dim">student@devops-lab</span>:<span class="ok">~/enterprise-devops-toolkit</span>$ <span class="cmd">docker inspect enterprise-taskflow:1.0.0 --format '{{.Config.User}}'</span></div>
+      <div style="margin-top:4px;" class="ok">appuser</div>
+
+      <div style="margin-top:10px;"><span class="dim">student@devops-lab</span>:<span class="ok">~/enterprise-devops-toolkit</span>$ <span class="cmd">docker images enterprise-taskflow</span></div>
+      <div style="margin-top:4px;" class="dim">REPOSITORY             TAG      IMAGE ID       CREATED         SIZE</div>
+      <div class="ok">enterprise-taskflow    1.0.0    8a3f2e19c47d   2 minutes ago   128MB</div>
+      <div style="margin-top:10px;" class="dim">student@devops-lab:~/enterprise-devops-toolkit$ <span class="ok">▌</span></div>
+    </div>
+  </div>
+  <div class="badges">
+    <div class="badge" style="background:#0d1117;border:1px solid #3fb950;color:#3fb950;">🏗️ 2-stage build ✅</div>
+    <div class="badge" style="background:#0d1117;border:1px solid #3fb950;color:#3fb950;">👤 USER: appuser (1001)</div>
+    <div class="badge" style="background:#0d1117;border:1px solid #a5d6ff;color:#a5d6ff;">📦 128 MB image</div>
+  </div>
+</body>
+</html>

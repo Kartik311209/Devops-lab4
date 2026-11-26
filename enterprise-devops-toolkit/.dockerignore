@@ -1,0 +1,58 @@
+# Docker ignore file for Enterprise TaskFlow
+# Keeps the build context small and prevents sensitive files from entering the image
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# SQLite databases (may contain real user data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+reports/
+
+# Git history (not needed in image)
+.git/
+.gitignore
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Documentation and screenshots
+docs/
+screenshots/
+*.md
+
+# Secrets and credentials (never enter the image)
+.env
+.env.*
+*.pem
+*.key
+secrets.yaml
+
+# CI/CD configs (not needed in runtime image)
+Jenkinsfile
+jenkins/
+kubernetes/
+gitops/
+scripts/
+disaster-recovery/
+monitoring/

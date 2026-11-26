@@ -1,0 +1,78 @@
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.so
+
+# ── Virtual environments ────────────────────────────────────────────────────
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# ── SQLite databases (may contain real data – never commit) ─────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Test / coverage artifacts ────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+reports/*.xml
+reports/*.html
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# ── Secrets and credentials (NEVER commit these) ────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets.yaml
+*-credentials.yaml
+*-secret-values.yaml
+vault-token
+kubeconfig
+kubeconfig-*
+
+# ── Docker ──────────────────────────────────────────────────────────────────
+# (Keep .dockerignore tracked in version control)
+
+# ── OS and editor files ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# ── Jenkins ─────────────────────────────────────────────────────────────────
+*.log
+
+# ── Backup files (may contain real data) ────────────────────────────────────
+disaster-recovery/backups/
+*.bak
+*.backup

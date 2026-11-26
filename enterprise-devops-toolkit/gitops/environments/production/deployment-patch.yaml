@@ -1,0 +1,21 @@
+# Production environment patch
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskflow-blue
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: taskflow
+          env:
+            - name: APP_ENV
+              value: "production"
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

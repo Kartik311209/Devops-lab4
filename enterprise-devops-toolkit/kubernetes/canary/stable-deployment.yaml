@@ -1,0 +1,86 @@
+# =============================================================================
+# kubernetes/canary/stable-deployment.yaml
+# Enterprise DevOps Deployment Toolkit (EDDT)
+#
+# Stable Deployment: Represents current production baseline (v1.0.0).
+# Initial replica count: 9 pods (~90% approximate traffic weight).
+#
+# NOTE: In vanilla Kubernetes, traffic distribution across pods behind a single
+# Service is governed by kube-proxy random/round-robin iptables rules.
+# Replica ratios only APPROXIMATE traffic splits and do not guarantee exact percentages.
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskflow-stable
+  namespace: default
+  labels:
+    app: taskflow
+    track: stable
+    version: "1.0.0"
+spec:
+  replicas: 9
+  selector:
+    matchLabels:
+      app: taskflow
+      track: stable
+  template:
+    metadata:
+      labels:
+        app: taskflow
+        track: stable
+        version: "1.0.0"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+        - name: taskflow
+          image: taskflow:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5000
+          env:
+            - name: APP_VERSION
+              value: "1.0.0"
+            - name: APP_ENV
+              value: "production"
+            - name: APP_COLOR
+              value: "blue"
+            - name: DATABASE_PATH
+              value: "/data/taskflow.db"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: taskflow-secret
+                  key: SECRET_KEY
+                  optional: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: taskflow-storage
+              mountPath: /data
+      volumes:
+        - name: taskflow-storage
+          emptyDir: {}

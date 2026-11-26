@@ -1,0 +1,59 @@
+# =============================================================================
+# gitops/application.yaml
+# Enterprise DevOps Deployment Toolkit (EDDT)
+#
+# Argo CD Application Custom Resource (CR)
+# Represents the declarative GitOps delivery model for Enterprise TaskFlow.
+#
+# NOTE: RepoURL uses an explicit placeholder per security instructions:
+#   https://github.com/YOUR_ORGANIZATION_PLACEHOLDER/enterprise-devops-toolkit.git
+# =============================================================================
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: taskflow-gitops
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: taskflow
+    app.kubernetes.io/part-of: eddt
+  finalizers:
+    # Ensures managed resources are deleted cleanly if this application is deleted
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  # ── Source: Git as the Single Source of Truth ──────────────────────────────
+  source:
+    repoURL: 'https://github.com/YOUR_ORGANIZATION_PLACEHOLDER/enterprise-devops-toolkit.git'
+    targetRevision: main
+    path: gitops/environments/production
+
+  # ── Destination: In-cluster Kubernetes target ──────────────────────────────
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: default
+
+  # ── Sync Policy: Automated GitOps Reconciliation ───────────────────────────
+  syncPolicy:
+    automated:
+      prune: true       # Automatically deletes resources removed from Git
+      selfHeal: true    # Automatically reverts manual changes made to the cluster
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # ── Ignore differences (e.g. for dynamic or externally-managed fields) ─────
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas # Allows HPA or manual canary scaling without out-of-sync alarms

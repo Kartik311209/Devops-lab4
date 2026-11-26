@@ -1,0 +1,135 @@
+# =============================================================================
+# docker/docker-compose.yml  –  Enterprise TaskFlow
+# =============================================================================
+#
+# Services:
+#   taskflow-blue   : Blue slot (active production)
+#   taskflow-green  : Green slot (staging / new version)
+#   taskflow-canary : Canary slot (small traffic fraction)
+#
+# Usage:
+#   # Start blue only (default):
+#   docker compose -f docker/docker-compose.yml up taskflow-blue
+#
+#   # Start all services:
+#   docker compose -f docker/docker-compose.yml up
+#
+#   # View logs:
+#   docker compose -f docker/docker-compose.yml logs -f
+#
+#   # Stop everything:
+#   docker compose -f docker/docker-compose.yml down
+#
+# Environment variables:
+#   Copy docker/.env.example to docker/.env and fill in values.
+#   NEVER commit docker/.env to version control.
+# =============================================================================
+
+version: "3.9"
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
+volumes:
+  blue-data:    # SQLite database for blue slot
+  green-data:   # SQLite database for green slot
+  canary-data:  # SQLite database for canary slot
+
+# ── Services ──────────────────────────────────────────────────────────────────
+services:
+
+  # ── Blue Slot (active production) ─────────────────────────────────────────
+  taskflow-blue:
+    build:
+      context: ..           # project root (one level up from docker/)
+      dockerfile: docker/Dockerfile
+      args:
+        APP_VERSION: "1.0.0"
+        BUILD_DATE: "${BUILD_DATE:-unknown}"
+        GIT_COMMIT: "${GIT_COMMIT:-unknown}"
+    image: taskflow:1.0.0
+    container_name: taskflow-blue
+    ports:
+      - "5000:5000"         # blue is the live slot → port 5000
+    environment:
+      APP_VERSION: "1.0.0"
+      APP_ENV: production
+      APP_COLOR: blue
+      DATABASE_PATH: /data/taskflow.db
+      # Inject SECRET_KEY from your shell environment (never hard-code it here)
+      SECRET_KEY: "${SECRET_KEY:-change-me-in-dot-env-file}"
+    volumes:
+      - blue-data:/data     # persist SQLite across container restarts
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - taskflow-net
+
+  # ── Green Slot (staging / new version) ────────────────────────────────────
+  taskflow-green:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        APP_VERSION: "2.0.0"
+        BUILD_DATE: "${BUILD_DATE:-unknown}"
+        GIT_COMMIT: "${GIT_COMMIT:-unknown}"
+    image: taskflow:2.0.0
+    container_name: taskflow-green
+    ports:
+      - "5001:5000"         # green on 5001 (not live yet – for validation)
+    environment:
+      APP_VERSION: "2.0.0"
+      APP_ENV: production
+      APP_COLOR: green
+      DATABASE_PATH: /data/taskflow.db
+      SECRET_KEY: "${SECRET_KEY:-change-me-in-dot-env-file}"
+    volumes:
+      - green-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - taskflow-net
+    profiles:
+      - green              # only start with: docker compose --profile green up
+
+  # ── Canary Slot (small traffic fraction) ──────────────────────────────────
+  taskflow-canary:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        APP_VERSION: "2.0.0-canary"
+    image: taskflow:2.0.0-canary
+    container_name: taskflow-canary
+    ports:
+      - "5002:5000"         # canary on 5002 (direct access for validation)
+    environment:
+      APP_VERSION: "2.0.0-canary"
+      APP_ENV: production
+      APP_COLOR: canary
+      DATABASE_PATH: /data/taskflow.db
+      SECRET_KEY: "${SECRET_KEY:-change-me-in-dot-env-file}"
+    volumes:
+      - canary-data:/data
+    restart: unless-stopped
+    networks:
+      - taskflow-net
+    profiles:
+      - canary             # only start with: docker compose --profile canary up
+
+# ── Network ───────────────────────────────────────────────────────────────────
+networks:
+  taskflow-net:
+    driver: bridge
+    name: taskflow-network

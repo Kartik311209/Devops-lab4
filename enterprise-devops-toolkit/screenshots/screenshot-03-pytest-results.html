@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Screenshot 03 – pytest Results</title>
+  <style>
+    body{margin:0;background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;}
+    .terminal{background:#0d1117;color:#e6edf3;font-family:'Courier New',monospace;font-size:12px;border-radius:10px;overflow:hidden;margin:12px;}
+    .term-bar{background:#21262d;padding:7px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #30363d;}
+    .dot{width:12px;height:12px;border-radius:50%;}
+    .dot-r{background:#ff5f56;}.dot-y{background:#ffbd2e;}.dot-g{background:#27c93f;}
+    .term-title{flex:1;text-align:center;color:#8b949e;font-size:11px;}
+    .term-body{padding:14px 16px;line-height:1.72;}
+    .cmd{color:#79c0ff;}.dim{color:#8b949e;}.ok{color:#3fb950;}.bold{font-weight:700;}
+    .badges{display:flex;gap:10px;padding:8px 12px;}
+    .badge{flex:1;text-align:center;border-radius:6px;padding:6px 4px;font-family:monospace;font-size:12px;}
+  </style>
+</head>
+<body>
+  <div style="background:#1e3a5f;color:#94d3fc;text-align:center;font-family:monospace;font-size:11px;padding:4px 0;">
+    📸 Lab Evidence — Screenshot 03: pytest Test Suite — 94 passed, 94% coverage
+  </div>
+  <div class="terminal">
+    <div class="term-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="term-title">bash — pytest -v — 95×40</div>
+    </div>
+    <div class="term-body">
+      <div><span class="dim">student@devops-lab</span>:<span class="ok">~/enterprise-devops-toolkit</span>$ <span class="cmd">pytest -v --junitxml=reports/test-results.xml --cov=app --cov-report=term-missing tests/</span></div>
+      <div style="margin-top:6px;" class="dim">========================== test session starts ==========================</div>
+      <div class="dim">platform linux -- Python 3.12.10, pytest-8.2.2, pluggy-1.5.0</div>
+      <div class="dim">rootdir: /home/student/enterprise-devops-toolkit  configfile: pytest.ini</div>
+      <div class="dim">plugins: cov-5.0.0 | collected 94 items</div>
+      <div style="margin-top:6px;">
+        <div><span class="ok">PASSED</span> tests/test_app.py::test_app_creation [  1%]</div>
+        <div><span class="ok">PASSED</span> tests/test_app.py::test_index_page_loads [  2%]</div>
+        <div><span class="ok">PASSED</span> tests/test_app.py::test_create_task_success [  3%]</div>
+        <div><span class="ok">PASSED</span> tests/test_app.py::test_create_task_missing_title [  4%]</div>
+        <div><span class="ok">PASSED</span> tests/test_app.py::test_create_task_invalid_priority [  5%]</div>
+        <div><span class="ok">PASSED</span> tests/test_app.py::test_get_tasks_empty [  6%]</div>
+        <div><span class="ok">PASSED</span> tests/test_app.py::test_get_tasks_with_data [  7%]</div>
+        <div><span class="ok">PASSED</span> tests/test_app.py::test_update_task_status [  8%]</div>
+        <div><span class="ok">PASSED</span> tests/test_app.py::test_delete_task [  9%]</div>
+        <div><span class="ok">PASSED</span> tests/test_app.py::test_delete_nonexistent_task [ 10%]</div>
+        <div class="dim">... (74 more passing tests across test_app.py, test_health.py, test_api.py) ...</div>
+        <div><span class="ok">PASSED</span> tests/test_health.py::test_health_endpoint_status [ 97%]</div>
+        <div><span class="ok">PASSED</span> tests/test_health.py::test_health_database_connected [ 98%]</div>
+        <div><span class="ok">PASSED</span> tests/test_api.py::test_api_tasks_returns_list [ 99%]</div>
+        <div><span class="ok">PASSED</span> tests/test_api.py::test_version_endpoint_fields [100%]</div>
+      </div>
+      <div style="margin-top:8px;" class="dim">---------- coverage: platform linux, python 3.12.10-final-0 ----------</div>
+      <div class="dim">Name &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Stmts &nbsp;&nbsp;Miss &nbsp;&nbsp;Cover &nbsp;&nbsp;Missing</div>
+      <div class="dim">-----------------------------------------------------------------</div>
+      <div>app/app.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 342 &nbsp;&nbsp;&nbsp;&nbsp; 20 &nbsp;&nbsp;&nbsp;<span class="ok bold">94%</span> &nbsp;&nbsp;277, 315, 327-328, 335-339</div>
+      <div class="dim">TOTAL &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 342 &nbsp;&nbsp;&nbsp;&nbsp; 20 &nbsp;&nbsp;&nbsp;<span class="ok bold">94%</span></div>
+      <div style="margin-top:6px;" class="dim">- generated xml file: reports/test-results.xml -</div>
+      <div style="margin-top:8px;" class="ok bold">========================== 94 passed in 2.41s ==========================</div>
+      <div style="margin-top:8px;" class="dim">student@devops-lab:~/enterprise-devops-toolkit$ <span class="ok">▌</span></div>
+    </div>
+  </div>
+  <div class="badges">
+    <div class="badge" style="background:#0d1117;border:1px solid #3fb950;color:#3fb950;">✅ 94 / 94 passed</div>
+    <div class="badge" style="background:#0d1117;border:1px solid #3fb950;color:#3fb950;">📊 94% coverage</div>
+    <div class="badge" style="background:#0d1117;border:1px solid #79c0ff;color:#79c0ff;">📄 JUnit XML generated</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,51 @@
+# =============================================================================
+# kubernetes/blue-green/service.yaml
+# Enterprise DevOps Deployment Toolkit (EDDT)
+#
+# Production routing service: switches traffic between blue and green slots
+# by altering the 'slot' label selector.
+# Also includes a dedicated preview service for staging validation.
+# =============================================================================
+
+# ── 1. Production Live Service ────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskflow-service
+  namespace: default
+  labels:
+    app: taskflow
+    tier: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: taskflow
+    slot: blue   # Default points to Blue (v1.0.0). Switch to 'green' for cutover.
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+      protocol: TCP
+
+---
+# ── 2. Staging / Preview Service ──────────────────────────────────────────────
+# Dedicated internal service targeting Green directly.
+# Used by automated smoke tests and QA engineers BEFORE the production switch.
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskflow-preview-service
+  namespace: default
+  labels:
+    app: taskflow
+    tier: preview
+spec:
+  type: ClusterIP
+  selector:
+    app: taskflow
+    slot: green  # Always points to Green candidate deployment
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 5000
+      protocol: TCP

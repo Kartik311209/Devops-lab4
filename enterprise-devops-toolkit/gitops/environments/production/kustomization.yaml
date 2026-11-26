@@ -1,0 +1,32 @@
+# =============================================================================
+# gitops/environments/production/kustomization.yaml
+# Enterprise DevOps Deployment Toolkit (EDDT)
+#
+# Production overlay: High-availability 3 replicas, full production resources.
+# =============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: eddt-prod
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+  managed-by: argocd
+
+resources:
+  - ../../../kubernetes/blue-green/blue-deployment.yaml
+  - ../../../kubernetes/blue-green/service.yaml
+
+patches:
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: taskflow-blue
+
+images:
+  - name: taskflow:1.0.0
+    newName: taskflow
+    newTag: "1.0.0"

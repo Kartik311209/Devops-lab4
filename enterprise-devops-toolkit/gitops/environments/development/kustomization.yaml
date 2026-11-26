@@ -1,0 +1,32 @@
+# =============================================================================
+# gitops/environments/development/kustomization.yaml
+# Enterprise DevOps Deployment Toolkit (EDDT)
+#
+# Development overlay: Minimal resource footprint, single replica.
+# =============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: eddt-dev
+
+namePrefix: dev-
+
+commonLabels:
+  environment: development
+  managed-by: argocd
+
+resources:
+  - ../../../kubernetes/blue-green/blue-deployment.yaml
+  - ../../../kubernetes/blue-green/service.yaml
+
+patches:
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: taskflow-blue
+
+images:
+  - name: taskflow:1.0.0
+    newName: taskflow
+    newTag: dev-latest

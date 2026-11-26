@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Screenshot 06 – Blue-Green Deploy</title>
+  <style>
+    body{margin:0;background:#f0f4f8;font-family:'Segoe UI',system-ui,sans-serif;}
+    .terminal{background:#0d1117;color:#e6edf3;font-family:'Courier New',monospace;font-size:11.5px;border-radius:10px;overflow:hidden;margin:12px;}
+    .term-bar{background:#21262d;padding:7px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #30363d;}
+    .dot{width:11px;height:11px;border-radius:50%;}
+    .dot-r{background:#ff5f56;}.dot-y{background:#ffbd2e;}.dot-g{background:#27c93f;}
+    .term-title{flex:1;text-align:center;color:#8b949e;font-size:11px;}
+    .term-body{padding:12px 16px;line-height:1.72;}
+    .cmd{color:#79c0ff;}.dim{color:#8b949e;}.ok{color:#3fb950;}.warn{color:#d29922;}
+    .blue{color:#60a5fa;}.section{color:#f97583;font-weight:700;}
+  </style>
+</head>
+<body>
+  <div style="background:#1e3a5f;color:#94d3fc;text-align:center;font-family:monospace;font-size:11px;padding:4px 0;">
+    📸 Lab Evidence — Screenshot 06: Blue-Green Deployment Script Execution
+  </div>
+  <div class="terminal">
+    <div class="term-bar">
+      <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      <div class="term-title">bash — deploy-blue.sh + deploy-green.sh — 90×46</div>
+    </div>
+    <div class="term-body">
+      <div><span class="dim">student@devops-lab</span>:<span class="ok">~/enterprise-devops-toolkit</span>$ <span class="cmd">bash scripts/deploy-blue.sh</span></div>
+      <div style="margin-top:6px;"><span class="section">╔═══════════════════════════════════════╗</span></div>
+      <div><span class="section">║  Enterprise TaskFlow — BLUE Deployment ║</span></div>
+      <div><span class="section">╚═══════════════════════════════════════╝</span></div>
+      <div class="ok">[INFO] Applying Blue deployment manifest...</div>
+      <div class="dim">deployment.apps/taskflow-blue created</div>
+      <div class="ok">[INFO] Waiting for Blue rollout to complete...</div>
+      <div class="dim">Waiting for deployment "taskflow-blue" rollout to finish: 0 of 3 updated replicas are available...</div>
+      <div class="dim">Waiting for deployment "taskflow-blue" rollout to finish: 1 of 3 updated replicas are available...</div>
+      <div class="dim">Waiting for deployment "taskflow-blue" rollout to finish: 2 of 3 updated replicas are available...</div>
+      <div class="ok">deployment "taskflow-blue" successfully rolled out</div>
+      <div class="ok">[INFO] Blue deployment healthy. Pods:</div>
+      <div class="dim">NAME                            READY   STATUS    RESTARTS   AGE</div>
+      <div class="blue">taskflow-blue-7d9f6b8c4-4xkqp   1/1     Running   0          28s</div>
+      <div class="blue">taskflow-blue-7d9f6b8c4-mnjk2   1/1     Running   0          28s</div>
+      <div class="blue">taskflow-blue-7d9f6b8c4-zp8r1   1/1     Running   0          28s</div>
+      <div class="ok">[SUCCESS] Blue deployment active — slot: blue, version: 1.0.0</div>
+
+      <div style="margin-top:12px;"><span class="dim">student@devops-lab</span>:<span class="ok">~/enterprise-devops-toolkit</span>$ <span class="cmd">bash scripts/deploy-green.sh</span></div>
+      <div style="margin-top:6px;"><span class="section">╔════════════════════════════════════════╗</span></div>
+      <div><span class="section">║  Enterprise TaskFlow — GREEN Deployment ║</span></div>
+      <div><span class="section">╚════════════════════════════════════════╝</span></div>
+      <div class="ok">[INFO] Applying Green deployment manifest...</div>
+      <div class="dim">deployment.apps/taskflow-green created</div>
+      <div class="ok">[INFO] Waiting for Green rollout to complete...</div>
+      <div class="ok">deployment "taskflow-green" successfully rolled out</div>
+      <div class="ok">[INFO] Green pods ready:</div>
+      <div class="dim">NAME                             READY   STATUS    RESTARTS   AGE</div>
+      <div style="color:#34d399;">taskflow-green-6cf7c9d5b-9abcd   1/1     Running   0          22s</div>
+      <div style="color:#34d399;">taskflow-green-6cf7c9d5b-efghi   1/1     Running   0          22s</div>
+      <div style="color:#34d399;">taskflow-green-6cf7c9d5b-jklmn   1/1     Running   0          22s</div>
+      <div class="ok">[INFO] Green preview service endpoint: http://localhost:5001/health → HTTP 200</div>
+      <div class="ok">[SUCCESS] Green deployment ready — slot: green, version: 2.0.0</div>
+      <div class="warn">[INFO] Traffic still routed to BLUE. Run service-switch to promote green.</div>
+      <div style="margin-top:8px;" class="dim">student@devops-lab:~/enterprise-devops-toolkit$ <span class="ok">▌</span></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# =============================================================================
+# gitops/environments/staging/kustomization.yaml
+# Enterprise DevOps Deployment Toolkit (EDDT)
+#
+# Staging overlay: 2 replicas, pre-production validation configuration.
+# =============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: eddt-staging
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging
+  managed-by: argocd
+
+resources:
+  - ../../../kubernetes/blue-green/blue-deployment.yaml
+  - ../../../kubernetes/blue-green/service.yaml
+
+patches:
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: taskflow-blue
+
+images:
+  - name: taskflow:1.0.0
+    newName: taskflow
+    newTag: staging-rc

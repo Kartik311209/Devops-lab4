@@ -1,0 +1,55 @@
+# =============================================================================
+# kubernetes/canary/service.yaml
+# Enterprise DevOps Deployment Toolkit (EDDT)
+#
+# Shared production service for Canary deployments.
+#
+# IMPORTANT TRAFFIC MECHANICS:
+# The service selector matches ONLY 'app: taskflow'. It does NOT filter by 'track'.
+# Therefore, Kubernetes endpoints include both Stable and Canary pods:
+#   Total pods = 10 (9 stable + 1 canary)
+#   Approximate traffic = ~90% stable, ~10% canary
+#
+# Exact percentage control requires service mesh / ingress controllers
+# (e.g., Istio VirtualService or NGINX ingress canary annotations).
+# =============================================================================
+
+# ── 1. Shared Production Service (Blended Traffic) ───────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskflow-canary-shared-service
+  namespace: default
+  labels:
+    app: taskflow
+spec:
+  type: ClusterIP
+  selector:
+    app: taskflow   # Blends stable and canary pods by matching common label
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+      protocol: TCP
+
+---
+# ── 2. Dedicated Canary Inspection Service ────────────────────────────────────
+# Routes 100% of its traffic strictly to canary pods for targeted testing.
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskflow-canary-direct-service
+  namespace: default
+  labels:
+    app: taskflow
+    tier: inspection
+spec:
+  type: ClusterIP
+  selector:
+    app: taskflow
+    track: canary   # Targets ONLY canary candidate pods
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 5000
+      protocol: TCP
